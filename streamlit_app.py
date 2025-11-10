@@ -1,5 +1,5 @@
 # --------------------------------------------------------------
-#  Starbase Live Weather – FINAL + Imperial Units in Blocks
+#  Starbase Live Weather – LIVE CLOCK + COUNTDOWN
 # --------------------------------------------------------------
 import streamlit as st
 import requests
@@ -83,18 +83,35 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- COUNTDOWN (WORKING) ----------
+# ---------- LIVE CLOCK + COUNTDOWN ----------
 secs_left = int(UPDATE_INTERVAL - (now - st.session_state.last_update))
-countdown_html = f"""
-<div id="countdown" style="font-weight: bold; color: {text_color};">{secs_left} secs</div>
+
+live_clock_html = f"""
+<div id="starbase-time" style="font-weight: bold; color: {text_color}; font-size: 1.1em;">
+{now_local:%Y-%m-%d %H:%M:%S}
+</div>
+<div id="countdown" style="font-weight: bold; color: {text_color}; margin-top: 4px;">
+{secs_left} secs
+</div>
 <script>
-let s = {secs_left};
-const el = document.getElementById('countdown');
-const iv = setInterval(() => {{
-    s--;
-    el.innerText = s + (s === 1 ? ' sec' : ' secs');
-    if (s <= 0) {{ clearInterval(iv); location.reload(); }}
-}}, 1000);
+const tz = 'America/Chicago';
+let start = {int(time.time())};
+const timeEl = document.getElementById('starbase-time');
+const countEl = document.getElementById('countdown');
+
+setInterval(() => {
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const local = new Date(utc + (-21600 * 1000));  // CST = UTC-6
+    const fmt = local.toISOString().slice(0,19).replace('T', ' ');
+    timeEl.innerText = fmt;
+
+    const elapsed = Math.floor((Date.now() / 1000) - start);
+    const left = {UPDATE_INTERVAL} - (elapsed % {UPDATE_INTERVAL});
+    countEl.innerText = left + (left === 1 ? ' sec' : ' secs');
+
+    if (left <= 0) location.reload();
+}, 1000);
 </script>
 """
 
@@ -102,7 +119,6 @@ const iv = setInterval(() => {{
 with placeholder.container():
     st.markdown(f"### {icon} **{('Day' if is_day else 'Night')}time at Starbase**")
 
-    # === METRICS ROW 1 ===
     c1, c2 = st.columns(2)
     with c1:
         st.metric("Temperature", f"{current['temp_c']}°C", f"{current['temp_f']}°F")
@@ -111,25 +127,20 @@ with placeholder.container():
         st.metric("Humidity", f"{current['humidity']}%")
         st.metric("Wind", f"{current['wind_kph']} kph", f"{current['wind_mph']} mph")
 
-    # === METRICS ROW 2 – PRECIP & VISIBILITY (IMPERIAL IN DELTA) ===
     c3, c4 = st.columns(2)
     with c3:
         st.metric("Precipitation", f"{current['precip_mm']} mm", f"{current['precip_in']} in")
     with c4:
         st.metric("Visibility", f"{current['vis_km']} km", f"{current['vis_miles']} mi")
 
-    # === REST ===
     st.markdown(f"### Air Quality: **{aq}** (EPA {epa})")
     st.markdown(f"**Wind Dir:** {current['wind_dir']}")
 
     st.markdown(f"**Sunrise:** `{sunrise:%H:%M}` **Sunset:** `{sunset:%H:%M}`")
 
-    st.markdown(f"""
-    **Starbase Time:** `{now_local:%Y-%m-%d %H:%M:%S}`  
-    **Data from:** `{location['localtime']}`  
-    **Next update in:**
-    """, unsafe_allow_html=True)
+    st.markdown("**Starbase Time:**", unsafe_allow_html=True)
+    html(live_clock_html, height=80)
 
-    html(countdown_html, height=50)
+    st.markdown(f"**Data from:** `{location['localtime']}`")
 
     st.caption(f"Last refresh: {datetime.fromtimestamp(st.session_state.last_update):%H:%M:%S}")
