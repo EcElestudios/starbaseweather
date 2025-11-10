@@ -80,7 +80,7 @@ def parse_time(t):
 sunrise = parse_time(astro["sunrise"])
 sunset = parse_time(astro["sunset"])
 is_day = sunrise <= now_local <= sunset
-icon = "Sun" if is_day else "Moon"
+#icon = "Sun" if is_day else "Moon"
 
 # ---------- AIR QUALITY ----------
 epa = current["air_quality"]["us-epa-index"]
@@ -145,7 +145,7 @@ st.title("Starbase Live Weather")
 st.markdown("**Location:** Starbase, TX (25.993217, -97.172555)")
 
 # ---------- DAY/NIGHT ----------
-st.markdown(f"### {icon} **{('Day' if is_day else 'Night')}time at Starbase**")
+#st.markdown(f"### {icon} **{('Day' if is_day else 'Night')}time at Starbase**")
 
 # ---------- WEATHER ICON & CONDITION ----------
 condition = current["condition"]["text"]
