@@ -21,7 +21,6 @@ st.set_page_config(
 @st.cache_data(ttl=UPDATE_INTERVAL, show_spinner="Fetching latest weather...")
 def fetch_all():
     try:
-        # Current weather + AQI
         cur = requests.get(
             "http://api.weatherapi.com/v1/current.json",
             params={"key": API_KEY, "q": LAT_LON, "aqi": "yes"},
@@ -30,7 +29,6 @@ def fetch_all():
         cur.raise_for_status()
         cur = cur.json()
 
-        # Astronomy (sunrise/sunset)
         astro = requests.get(
             "http://api.weatherapi.com/v1/astronomy.json",
             params={"key": API_KEY, "q": LAT_LON},
@@ -73,7 +71,6 @@ tz = pytz.timezone("America/Chicago")
 now_local = utc_now.astimezone(tz)
 
 def parse_time(t):
-    """Parse sunrise/sunset time string and return correct datetime (handles next day)"""
     time_obj = datetime.strptime(t, "%I:%M %p").time()
     candidate = tz.localize(datetime.combine(now_local.date(), time_obj))
     if candidate < now_local:
@@ -101,7 +98,7 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- LIVE CLOCK + COUNTDOWN ----------
+# ---------- LIVE CLOCK + COUNTDOWN (FIXED) ----------
 secs_left = int(UPDATE_INTERVAL - (now - st.session_state.last_update))
 clock_html = f"""
 <div style="text-align: center; padding: 10px; font-family: monospace;">
@@ -117,7 +114,7 @@ clock_html = f"""
   const clockEl = document.getElementById('starbase-clock');
   const countEl = document.getElementById('countdown');
 
-  function updateClock() {
+  function updateClock() {{
     const now = new Date();
     const formatter = new Intl.DateTimeFormat('en-US', {{
       timeZone: 'America/Chicago',
@@ -135,21 +132,19 @@ clock_html = f"""
     countEl.innerText = `Next update in ${{left}} ${{left === 1 ? 'sec' : 'secs'}}`;
     
     if (left <= 0) location.reload();
-  }
+  }}
 
   setInterval(updateClock, 1000);
   updateClock();
 </script>
 """
+html(clock_html, height=100)
 
 # ---------- TITLE ----------
 st.title("Starbase Live Weather")
 st.markdown("**Location:** Starbase, TX (25.993217, -97.172555)")
 
-# Display clock
-html(clock_html, height=100)
-
-# ---------- DAY/NIGHT STATUS ----------
+# ---------- DAY/NIGHT ----------
 st.markdown(f"### {icon} **{('Day' if is_day else 'Night')}time at Starbase**")
 
 # ---------- WEATHER ICON & CONDITION ----------
@@ -158,7 +153,7 @@ icon_url = f"https:{current['condition']['icon']}"
 st.markdown(f"**{condition}**")
 st.image(icon_url, width=80)
 
-# ---------- ROW 1: TEMP & FEELS ----------
+# ---------- ROW 1 ----------
 c1, c2 = st.columns(2)
 with c1:
     st.metric("Temperature", f"{current['temp_c']}°C", f"{current['temp_f']}°F")
@@ -167,7 +162,7 @@ with c2:
     st.metric("Humidity", f"{current['humidity']}%")
     st.metric("Wind", f"{current['wind_kph']} kph", f"{current['wind_mph']} mph")
 
-# ---------- ROW 2: PRECIP, VIS, UV, CLOUD ----------
+# ---------- ROW 2 ----------
 c3, c4 = st.columns(2)
 with c3:
     st.metric("Precipitation", f"{current['precip_mm']} mm", f"{current['precip_in']} in")
@@ -185,10 +180,10 @@ st.markdown(f"**Wind Direction:** {current['wind_dir']}")
 # ---------- SUNRISE / SUNSET ----------
 st.markdown(f"**Sunrise:** `{sunrise:%H:%M}` **Sunset:** `{sunset:%H:%M}`")
 
-# ---------- LAUNCH-SAFE WEATHER CHECK ----------
+# ---------- LAUNCH-SAFE CHECK ----------
 wind_kph = current["wind_kph"]
 gust_kph = current.get("gust_kph", wind_kph * 1.5)
-precip_rate = current["precip_mm"]  # WeatherAPI: mm in last hour ≈ rate
+precip_rate = current["precip_mm"]
 vis_km = current["vis_km"]
 condition_lower = current["condition"]["text"].lower()
 
