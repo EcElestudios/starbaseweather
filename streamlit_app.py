@@ -80,11 +80,6 @@ def parse_time(t):
 sunrise = parse_time(astro["sunrise"])
 sunset = parse_time(astro["sunset"])
 is_day = sunrise <= now_local <= sunset
-#icon = "Sun" if is_day else "Moon"
-
-# ---------- AIR QUALITY ----------
-epa = current["air_quality"]["us-epa-index"]
-aq = "Good" if epa <= 2 else "Moderate" if epa <= 4 else "Unhealthy"
 
 # ---------- AUTO THEME ----------
 text_color = "#ffffff" if not is_day else "#000000"
@@ -98,7 +93,7 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- LIVE CLOCK + COUNTDOWN (FIXED) ----------
+# ---------- LIVE CLOCK + COUNTDOWN ----------
 secs_left = int(UPDATE_INTERVAL - (now - st.session_state.last_update))
 clock_html = f"""
 <div style="text-align: center; padding: 10px; font-family: monospace;">
@@ -144,16 +139,13 @@ html(clock_html, height=100)
 st.title("Starbase Live Weather")
 st.markdown("**Location:** Starbase, TX (25.993217, -97.172555)")
 
-# ---------- DAY/NIGHT ----------
-#st.markdown(f"### {icon} **{('Day' if is_day else 'Night')}time at Starbase**")
-
-# ---------- WEATHER ICON & CONDITION ----------
+# ---------- WEATHER CONDITION ----------
 condition = current["condition"]["text"]
 icon_url = f"https:{current['condition']['icon']}"
 st.markdown(f"**{condition}**")
 st.image(icon_url, width=80)
 
-# ---------- ROW 1 ----------
+# ---------- ROW 1: TEMP + WIND ----------
 c1, c2 = st.columns(2)
 with c1:
     st.metric("Temperature", f"{current['temp_c']}°C", f"{current['temp_f']}°F")
@@ -162,7 +154,7 @@ with c2:
     st.metric("Humidity", f"{current['humidity']}%")
     st.metric("Wind", f"{current['wind_kph']} kph", f"{current['wind_mph']} mph")
 
-# ---------- ROW 2 ----------
+# ---------- ROW 2: PRECIP + VIS ----------
 c3, c4 = st.columns(2)
 with c3:
     st.metric("Precipitation", f"{current['precip_mm']} mm", f"{current['precip_in']} in")
@@ -171,16 +163,18 @@ with c4:
     st.metric("Visibility", f"{current['vis_km']} km", f"{current['vis_miles']} mi")
     st.metric("Cloud Cover", f"{current['cloud']}%")
 
-# ---------- AIR QUALITY ----------
-st.markdown(f"### Air Quality: **{aq}** (EPA Index: {epa})")
+# ---------- ROW 3: AIR QUALITY + LAUNCH CHECK ----------
+c5, c6 = st.columns(2)
 
-# ---------- WIND DIRECTION ----------
-st.markdown(f"**Wind Direction:** {current['wind_dir']}")
+# Air Quality
+epa = current["air_quality"]["us-epa-index"]
+aq = "Good" if epa <= 2 else "Moderate" if epa <= 4 else "Unhealthy"
+aq_color = "green" if epa <= 2 else "orange" if epa <= 4 else "red"
+with c5:
+    st.markdown(f"### Air Quality")
+    st.markdown(f"<span style='font-size:1.2em; color:{aq_color};'>**{aq}**</span> (EPA {epa})", unsafe_allow_html=True)
 
-# ---------- SUNRISE / SUNSET ----------
-st.markdown(f"**Sunrise:** `{sunrise:%H:%M}` **Sunset:** `{sunset:%H:%M}`")
-
-# ---------- LAUNCH-SAFE CHECK ----------
+# Launch-Safe Check
 wind_kph = current["wind_kph"]
 gust_kph = current.get("gust_kph", wind_kph * 1.5)
 precip_rate = current["precip_mm"]
@@ -194,20 +188,29 @@ wind_excess = wind_kph > 30 or gust_kph > 45
 
 launch_safe = not (has_thunder or heavy_rain or low_vis or wind_excess)
 safety_icon = "SAFE" if launch_safe else "ABORT"
+safety_color = "green" if launch_safe else "red"
 
 issues = []
-if has_thunder:   issues.append("Thunderstorm/Lightning")
-if heavy_rain:    issues.append(f"Heavy rain ({precip_rate:.1f} mm/h)")
-if low_vis:       issues.append(f"Low vis ({vis_km} km)")
-if wind_excess:   issues.append(f"High wind ({wind_kph}/{gust_kph:.1f} kph)")
+if has_thunder:   issues.append("Thunderstorm")
+if heavy_rain:    issues.append(f"Rain {precip_rate:.1f} mm/h")
+if low_vis:       issues.append(f"Vis {vis_km} km")
+if wind_excess:   issues.append(f"Wind {wind_kph}/{gust_kph:.1f} kph")
 
-issue_text = " • ".join(issues) if issues else "All systems go"
+issue_text = " • ".join(issues) if issues else "Clear"
 
-st.markdown(
-    f"### {safety_icon} **Launch-Safe Check**  \n"
-    f"**Status:** `{'SAFE' if launch_safe else 'ABORT'}`  \n"
-    f"**Details:** {issue_text}"
-)
+with c6:
+    st.markdown(f"### Launch Check")
+    st.markdown(
+        f"<span style='font-size:1.2em; color:{safety_color};'>**{safety_icon}**</span><br>"
+        f"<small>{issue_text}</small>",
+        unsafe_allow_html=True
+    )
+
+# ---------- SUNRISE / SUNSET ----------
+st.markdown(f"**Sunrise:** `{sunrise:%H:%M}` **Sunset:** `{sunset:%H:%M}`")
+
+# ---------- WIND DIRECTION ----------
+st.markdown(f"**Wind Direction:** {current['wind_dir']}")
 
 # ---------- FOOTER ----------
 st.markdown(f"**Data from:** `{location['localtime']}`")
