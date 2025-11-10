@@ -145,34 +145,33 @@ icon_url = f"https:{current['condition']['icon']}"
 st.markdown(f"**{condition}**")
 st.image(icon_url, width=80)
 
-# ---------- ROW 1: TEMP + WIND ----------
-c1, c2 = st.columns(2)
-with c1:
+# ---------- ROW 1: TEMP, FEELS, HUMIDITY, WIND ----------
+row1 = st.columns(4)
+with row1[0]:
     st.metric("Temperature", f"{current['temp_c']}°C", f"{current['temp_f']}°F")
+with row1[1]:
     st.metric("Feels Like", f"{current['feelslike_c']}°C", f"{current['feelslike_f']}°F")
-with c2:
+with row1[2]:
     st.metric("Humidity", f"{current['humidity']}%")
+with row1[3]:
     st.metric("Wind", f"{current['wind_kph']} kph", f"{current['wind_mph']} mph")
 
-# ---------- ROW 2: PRECIP + VIS ----------
-c3, c4 = st.columns(2)
-with c3:
-    st.metric("Precipitation", f"{current['precip_mm']} mm", f"{current['precip_in']} in")
-    st.metric("UV Index", current["uv"])
-with c4:
-    st.metric("Visibility", f"{current['vis_km']} km", f"{current['vis_miles']} mi")
-    st.metric("Cloud Cover", f"{current['cloud']}%")
+# ---------- ROW 2: PRECIP, VIS, AIR QUALITY, LAUNCH CHECK ----------
+row2 = st.columns(4)
 
-# ---------- ROW 3: AIR QUALITY + LAUNCH CHECK ----------
-c5, c6 = st.columns(2)
+# Precip & Visibility
+with row2[0]:
+    st.metric("Precipitation", f"{current['precip_mm']} mm", f"{current['precip_in']} in")
+with row2[1]:
+    st.metric("Visibility", f"{current['vis_km']} km", f"{current['vis_miles']} mi")
 
 # Air Quality
 epa = current["air_quality"]["us-epa-index"]
 aq = "Good" if epa <= 2 else "Moderate" if epa <= 4 else "Unhealthy"
 aq_color = "green" if epa <= 2 else "orange" if epa <= 4 else "red"
-with c5:
-    st.markdown(f"### Air Quality")
-    st.markdown(f"<span style='font-size:1.2em; color:{aq_color};'>**{aq}**</span> (EPA {epa})", unsafe_allow_html=True)
+with row2[2]:
+    st.markdown("### Air Quality")
+    st.markdown(f"<span style='font-size:1.2em; color:{aq_color};'>**{aq}**</span><br><small>EPA {epa}</small>", unsafe_allow_html=True)
 
 # Launch-Safe Check
 wind_kph = current["wind_kph"]
@@ -191,15 +190,15 @@ safety_icon = "SAFE" if launch_safe else "ABORT"
 safety_color = "green" if launch_safe else "red"
 
 issues = []
-if has_thunder:   issues.append("Thunderstorm")
-if heavy_rain:    issues.append(f"Rain {precip_rate:.1f} mm/h")
-if low_vis:       issues.append(f"Vis {vis_km} km")
-if wind_excess:   issues.append(f"Wind {wind_kph}/{gust_kph:.1f} kph")
+if has_thunder:   issues.append("Thunder")
+if heavy_rain:    issues.append(f"Rain {precip_rate:.1f}")
+if low_vis:       issues.append(f"Vis {vis_km}")
+if wind_excess:   issues.append(f"Wind {wind_kph}/{gust_kph:.1f}")
 
 issue_text = " • ".join(issues) if issues else "Clear"
 
-with c6:
-    st.markdown(f"### Launch Check")
+with row2[3]:
+    st.markdown("### Launch Check")
     st.markdown(
         f"<span style='font-size:1.2em; color:{safety_color};'>**{safety_icon}**</span><br>"
         f"<small>{issue_text}</small>",
