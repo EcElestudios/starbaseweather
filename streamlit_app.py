@@ -1,11 +1,12 @@
 # --------------------------------------------------------------
-#  Starbase Live Weather – Auto Theme + Adaptive Text Color
+#  Starbase Live Weather – FINAL + Imperial Units in Blocks
 # --------------------------------------------------------------
 import streamlit as st
 import requests
 import time
 from datetime import datetime
 import pytz
+from streamlit.components.v1 import html
 
 # ---------- CONFIG ----------
 API_KEY = st.secrets.get("WEATHER_API_KEY", "50e0ace4ca4444e68c812956251011")
@@ -59,51 +60,49 @@ utc_now = datetime.now(pytz.UTC)
 tz = pytz.timezone("America/Chicago")
 now_local = utc_now.astimezone(tz)
 
-def parse_time(t):  # "07:15 AM"
+def parse_time(t):
     return tz.localize(datetime.strptime(f"{now_local.date()} {t}", "%Y-%m-%d %I:%M %p"))
 
 sunrise = parse_time(astro["sunrise"])
 sunset  = parse_time(astro["sunset"])
 is_day = sunrise <= now_local <= sunset
 icon = "Sun" if is_day else "Moon"
-mode = "light" if is_day else "dark"
 
 # ---------- AIR QUALITY ----------
 epa = current["air_quality"]["us-epa-index"]
 aq = "Good" if epa <= 2 else "Moderate" if epa <= 4 else "Unhealthy"
 
-# ---------- AUTO THEME + TEXT COLOR ----------
+# ---------- AUTO THEME ----------
 text_color = "#ffffff" if not is_day else "#000000"
 bg_color   = "#fafafa" if is_day else "#1e1e1e"
 
 st.markdown(f"""
 <style>
     .stApp {{ background: {bg_color}; color: {text_color}; }}
-    .stMetric > div {{ color: {text_color} !important; }}
-    h1, h2, h3, h4, h5, h6, p, div, span {{ color: {text_color} !important; }}
-    .stMarkdown {{ color: {text_color} !important; }}
+    .stMetric > div, h1, h2, h3, p, div, span, .stMarkdown {{ color: {text_color} !important; }}
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- COUNTDOWN JS ----------
+# ---------- COUNTDOWN (WORKING) ----------
 secs_left = int(UPDATE_INTERVAL - (now - st.session_state.last_update))
-js = f"""
+countdown_html = f"""
+<div id="countdown" style="font-weight: bold; color: {text_color};">{secs_left} secs</div>
 <script>
 let s = {secs_left};
-const el = parent.document.getElementById('cnt');
+const el = document.getElementById('countdown');
 const iv = setInterval(() => {{
-    if (s <= 0) {{ clearInterval(iv); location.reload(); }}
-    el.innerText = s + (s===1 ? ' sec' : ' secs');
     s--;
+    el.innerText = s + (s === 1 ? ' sec' : ' secs');
+    if (s <= 0) {{ clearInterval(iv); location.reload(); }}
 }}, 1000);
 </script>
 """
-countdown_ph = st.empty()
 
 # ---------- DISPLAY ----------
 with placeholder.container():
     st.markdown(f"### {icon} **{('Day' if is_day else 'Night')}time at Starbase**")
 
+    # === METRICS ROW 1 ===
     c1, c2 = st.columns(2)
     with c1:
         st.metric("Temperature", f"{current['temp_c']}°C", f"{current['temp_f']}°F")
@@ -112,18 +111,25 @@ with placeholder.container():
         st.metric("Humidity", f"{current['humidity']}%")
         st.metric("Wind", f"{current['wind_kph']} kph", f"{current['wind_mph']} mph")
 
+    # === METRICS ROW 2 – PRECIP & VISIBILITY (IMPERIAL IN DELTA) ===
+    c3, c4 = st.columns(2)
+    with c3:
+        st.metric("Precipitation", f"{current['precip_mm']} mm", f"{current['precip_in']} in")
+    with c4:
+        st.metric("Visibility", f"{current['vis_km']} km", f"{current['vis_miles']} mi")
+
+    # === REST ===
     st.markdown(f"### Air Quality: **{aq}** (EPA {epa})")
-    st.markdown(f"**Wind:** {current['wind_dir']} **Precip:** {current['precip_mm']} mm **Vis:** {current['vis_km']} km")
+    st.markdown(f"**Wind Dir:** {current['wind_dir']}")
 
     st.markdown(f"**Sunrise:** `{sunrise:%H:%M}` **Sunset:** `{sunset:%H:%M}`")
 
-    # Use markdown for full HTML + styling
     st.markdown(f"""
     **Starbase Time:** `{now_local:%Y-%m-%d %H:%M:%S}`  
     **Data from:** `{location['localtime']}`  
-    **Next update in:** <span id="cnt" style="font-weight:bold">{secs_left} secs</span>
+    **Next update in:**
     """, unsafe_allow_html=True)
 
-    countdown_ph.markdown(js, unsafe_allow_html=True)
+    html(countdown_html, height=50)
 
     st.caption(f"Last refresh: {datetime.fromtimestamp(st.session_state.last_update):%H:%M:%S}")
