@@ -1,5 +1,5 @@
 # --------------------------------------------------------------
-#  Starbase Live Weather – Streamlit (works with your env)
+#  Starbase Live Weather – Auto Theme + Adaptive Text Color
 # --------------------------------------------------------------
 import streamlit as st
 import requests
@@ -10,91 +10,82 @@ import pytz
 # ---------- CONFIG ----------
 API_KEY = st.secrets.get("WEATHER_API_KEY", "50e0ace4ca4444e68c812956251011")
 LAT_LON = "25.993217,-97.172555"
-UPDATE_INTERVAL = 60          # seconds – weather refresh
+UPDATE_INTERVAL = 60
 
 # ---------- PAGE ----------
 st.set_page_config(page_title="Starbase Weather", layout="centered")
 st.title("Starbase Live Weather")
 st.markdown("**Location:** Starbase, TX (25.993217, -97.172555)")
 
-# ---------- CACHED API CALL ----------
+# ---------- CACHED API ----------
 @st.cache_data(ttl=UPDATE_INTERVAL, show_spinner=False)
 def fetch_all():
-    # 1. Current + AQI
-    cur_url = "http://api.weatherapi.com/v1/current.json"
-    cur_params = {"key": API_KEY, "q": LAT_LON, "aqi": "yes"}
-    cur = requests.get(cur_url, params=cur_params, timeout=10).json()
-
-    # 2. Astronomy (sunrise/sunset) – free endpoint
-    astro_url = "http://api.weatherapi.com/v1/astronomy.json"
-    astro_params = {"key": API_KEY, "q": LAT_LON}
-    astro = requests.get(astro_url, params=astro_params, timeout=10).json()["astronomy"]["astro"]
-
+    cur = requests.get(
+        "http://api.weatherapi.com/v1/current.json",
+        params={"key": API_KEY, "q": LAT_LON, "aqi": "yes"},
+        timeout=10
+    ).json()
+    astro = requests.get(
+        "http://api.weatherapi.com/v1/astronomy.json",
+        params={"key": API_KEY, "q": LAT_LON},
+        timeout=10
+    ).json()["astronomy"]["astro"]
     cur["astronomy"] = astro
     return cur
 
-# ---------- SESSION STATE ----------
+# ---------- SESSION ----------
 if "last_update" not in st.session_state:
     st.session_state.last_update = time.time()
 
 now = time.time()
-elapsed = now - st.session_state.last_update
-
-# Refresh data only every UPDATE_INTERVAL
-if elapsed >= UPDATE_INTERVAL:
+if now - st.session_state.last_update >= UPDATE_INTERVAL:
     st.session_state.last_update = now
-    st.cache_data.clear()          # forces a fresh call
+    st.cache_data.clear()
 
-# ---------- FETCH ----------
+# ---------- DATA ----------
 data = fetch_all()
 placeholder = st.empty()
-
 if not data:
     with placeholder.container():
-        st.warning("Waiting for weather data…")
+        st.warning("Waiting for data…")
     st.stop()
 
 current = data["current"]
 location = data["location"]
 astro = data["astronomy"]
 
-# ---------- TIME HANDLING ----------
+# ---------- TIME ----------
 utc_now = datetime.now(pytz.UTC)
-starbase_tz = pytz.timezone("America/Chicago")
-starbase_now = utc_now.astimezone(starbase_tz)
+tz = pytz.timezone("America/Chicago")
+now_local = utc_now.astimezone(tz)
 
-# Sunrise / Sunset (parse “07:15 AM” style strings)
-def parse_astro(t):
-    return starbase_tz.localize(
-        datetime.strptime(f"{starbase_now.date()} {t}", "%Y-%m-%d %I:%M %p")
-    )
-sunrise_dt = parse_astro(astro["sunrise"])
-sunset_dt  = parse_astro(astro["sunset"])
+def parse_time(t):  # "07:15 AM"
+    return tz.localize(datetime.strptime(f"{now_local.date()} {t}", "%Y-%m-%d %I:%M %p"))
 
-is_day = sunrise_dt <= starbase_now <= sunset_dt
-status = "daytime" if is_day else "nighttime"
-icon   = "Sun" if is_day else "Moon"
+sunrise = parse_time(astro["sunrise"])
+sunset  = parse_time(astro["sunset"])
+is_day = sunrise <= now_local <= sunset
+icon = "Sun" if is_day else "Moon"
+mode = "light" if is_day else "dark"
 
 # ---------- AIR QUALITY ----------
 epa = current["air_quality"]["us-epa-index"]
-if epa <= 2:
-    aq, col = "Good", "green"
-elif epa <= 4:
-    aq, col = "Moderate", "orange"
-else:
-    aq, col = "Unhealthy", "red"
+aq = "Good" if epa <= 2 else "Moderate" if epa <= 4 else "Unhealthy"
 
-# ---------- AUTO THEME ----------
-theme_css = f"""
+# ---------- AUTO THEME + TEXT COLOR ----------
+text_color = "#ffffff" if not is_day else "#000000"
+bg_color   = "#fafafa" if is_day else "#1e1e1e"
+
+st.markdown(f"""
 <style>
-    .stApp {{ background: {'#fafafa' if is_day else '#1e1e1e'}; 
-              color: {'#000' if is_day else '#fff'}; }}
-    .stMetric > div {{ color: {'#000' if is_day else '#fff'} !important; }}
+    .stApp {{ background: {bg_color}; color: {text_color}; }}
+    .stMetric > div {{ color: {text_color} !important; }}
+    h1, h2, h3, h4, h5, h6, p, div, span {{ color: {text_color} !important; }}
+    .stMarkdown {{ color: {text_color} !important; }}
 </style>
-"""
-st.markdown(theme_css, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
-# ---------- LIVE COUNTDOWN (JS) ----------
+# ---------- COUNTDOWN JS ----------
 secs_left = int(UPDATE_INTERVAL - (now - st.session_state.last_update))
 js = f"""
 <script>
@@ -111,7 +102,7 @@ countdown_ph = st.empty()
 
 # ---------- DISPLAY ----------
 with placeholder.container():
-    st.markdown(f"### {icon} **{status.capitalize()} at Starbase**")
+    st.markdown(f"### {icon} **{('Day' if is_day else 'Night')}time at Starbase**")
 
     c1, c2 = st.columns(2)
     with c1:
@@ -122,16 +113,15 @@ with placeholder.container():
         st.metric("Wind", f"{current['wind_kph']} kph", f"{current['wind_mph']} mph")
 
     st.markdown(f"### Air Quality: **{aq}** (EPA {epa})")
-    st.markdown(f"**Wind Dir:** {current['wind_dir']}")
-    st.markdown(f"**Precip:** {current['precip_mm']} mm ({current['precip_in']} in)")
-    st.markdown(f"**Visibility:** {current['vis_km']} km ({current['vis_miles']} mi)")
+    st.markdown(f"**Wind:** {current['wind_dir']} **Precip:** {current['precip_mm']} mm **Vis:** {current['vis_km']} km")
 
-    st.markdown(f"**Sunrise:** `{sunrise_dt:%H:%M}` **Sunset:** `{sunset_dt:%H:%M}`")
+    st.markdown(f"**Sunrise:** `{sunrise:%H:%M}` **Sunset:** `{sunset:%H:%M}`")
 
-    st.info(f"""
-    **Starbase Time:** `{starbase_now:%Y-%m-%d %H:%M:%S}`  
+    # Use markdown for full HTML + styling
+    st.markdown(f"""
+    **Starbase Time:** `{now_local:%Y-%m-%d %H:%M:%S}`  
     **Data from:** `{location['localtime']}`  
-    **Next update in:** <span id="cnt">{secs_left} secs</span>
+    **Next update in:** <span id="cnt" style="font-weight:bold">{secs_left} secs</span>
     """, unsafe_allow_html=True)
 
     countdown_ph.markdown(js, unsafe_allow_html=True)
